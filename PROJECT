@@ -1,0 +1,8 @@
+domain: example.com
+layout: go.kubebuilder.io/v3
+projectName: galera-operator
+repo: github.com/dciabrin/galera-operator
+version: 3-alpha
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
