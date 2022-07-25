@@ -2,6 +2,11 @@ domain: example.com
 layout: go.kubebuilder.io/v3
 projectName: galera-operator
 repo: github.com/dciabrin/galera-operator
+resources:
+- crdVersion: v1
+  group: database
+  kind: Galera
+  version: v1
 version: 3-alpha
 plugins:
   manifests.sdk.operatorframework.io/v2: {}

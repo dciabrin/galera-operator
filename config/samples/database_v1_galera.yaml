@@ -1,0 +1,7 @@
+apiVersion: database.dciabrin.net/v1
+kind: Galera
+metadata:
+  name: galera-sample
+spec:
+  # Add fields here
+  foo: bar
