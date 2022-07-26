@@ -1,0 +1,91 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
+  name: galeras.database.example.com
+spec:
+  group: database.example.com
+  names:
+    kind: Galera
+    listKind: GaleraList
+    plural: galeras
+    singular: galera
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Galera is the Schema for the galeras API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: GaleraSpec defines the desired state of Galera
+            properties:
+              image:
+                description: Name of the galera container image to run
+                type: string
+              secret:
+                description: Name of the secret to look for password keys
+                type: string
+              size:
+                description: Size of the galera cluster deployment
+                format: int32
+                minimum: 1
+                type: integer
+            required:
+            - image
+            - size
+            type: object
+          status:
+            description: GaleraStatus defines the observed state of Galera
+            properties:
+              attributes:
+                additionalProperties:
+                  properties:
+                    gcomm:
+                      description: URI used to connect to the galera cluster
+                      type: string
+                    seqno:
+                      description: Last recorded replication sequence number in the
+                        DB
+                      type: string
+                  required:
+                  - seqno
+                  type: object
+                description: A map of database node attributes for each pod
+                type: object
+              bootstrapped:
+                description: Is the galera cluster currently running
+                type: boolean
+              safeToBootstrap:
+                description: Name of the node that can safely bootstrap a cluster
+                type: string
+            required:
+            - bootstrapped
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

@@ -1,7 +1,8 @@
-apiVersion: database.dciabrin.net/v1
+apiVersion: database.example.com/v1
 kind: Galera
 metadata:
-  name: galera-sample
+  name: galera
 spec:
-  # Add fields here
-  foo: bar
+  secret: galera-secrets
+  image: quay.io/tripleomaster/openstack-mariadb:current-tripleo
+  size: 3

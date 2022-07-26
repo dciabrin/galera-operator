@@ -1,0 +1,264 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: galera-config
+data:
+  mysql_bootstrap.sh: |
+    set +x
+    PODNAME=$(hostname -f | cut -d. -f1,2)
+    PODIP=$(grep "$PODNAME" /etc/hosts | cut -d$'\t' -f1)
+    # PODIP=$(getent hosts "$PODNAME" | cut -d' ' -f1)
+    echo $PODNAME
+    echo $PODIP
+    sed -e "s/{{ PODNAME }}/${PODNAME}/" -e "s/{{ PODIP }}/${PODIP}/" /var/lib/config-data/galera.cnf.in > /var/lib/pod-config-data/galera.cnf
+    if [ -e /var/lib/mysql/mysql ]; then
+      echo -e "Database already bootstrapped"
+      exit 0
+    fi
+    echo -e "\n[mysqld]\nwsrep_provider=none" >> /etc/my.cnf
+    kolla_set_configs
+    sudo -u mysql -E kolla_extend_start
+
+  detect_last_commit.sh: |
+    # Adapted from clusterlab's galera resource agent
+    recover_args="--datadir=/var/lib/mysql \
+                  --user=mysql \
+                  --skip-networking \
+                  --wsrep-cluster-address=gcomm://localhost"
+    recovery_file_regex='s/.*WSREP\:.*position\s*recovery.*--log_error='\''\([^'\'']*\)'\''.*/\1/p'
+    recovered_position_regex='s/.*WSREP\:\s*[R|r]ecovered\s*position.*\:\(.*\)\s*$/\1/p'
+    
+    # codership/galera#354
+    # Some ungraceful shutdowns can leave an empty gvwstate.dat on
+    # disk. This will prevent galera to join the cluster if it is
+    # configured to attempt PC recovery. Removing that file makes the
+    # node fall back to the normal, unoptimized joining process.
+    if [ -f /var/lib/mysql/gvwstate.dat ] && \
+       [ ! -s /var/lib/mysql/gvwstate.dat ]; then
+        echo "empty /var/lib/mysql/gvwstate.dat detected, removing it to prevent PC recovery failure at next restart" >&2
+        rm -f /var/lib/mysql/gvwstate.dat
+    fi
+    
+    echo "attempting to detect last commit version by reading grastate.dat" >&2
+    last_commit="$(cat /var/lib/mysql/grastate.dat | sed -n 's/^seqno.\s*\(.*\)\s*$/\1/p')"
+    if [ -z "$last_commit" ] || [ "$last_commit" = "-1" ]; then
+        tmp=$(mktemp)
+        chown mysql:mysql $tmp
+    
+        # if we pass here because grastate.dat doesn't exist,
+        # try not to bootstrap from this node if possible
+        # if [ ! -f /var/lib/mysql/grastate.dat ]; then
+        #     set_no_grastate
+        # fi
+    
+        echo "now attempting to detect last commit version using 'mysqld_safe --wsrep-recover'" >&2
+    
+        mysqld_safe --wsrep-recover $recover_args --log-error=$tmp 1>&2
+    
+        last_commit="$(cat $tmp | sed -n $recovered_position_regex | tail -1)"
+        if [ -z "$last_commit" ]; then
+            # Galera uses InnoDB's 2pc transactions internally. If
+            # server was stopped in the middle of a replication, the
+            # recovery may find a "prepared" XA transaction in the
+            # redo log, and mysql won't recover automatically
+    
+            local recovery_file="$(cat $tmp | sed -n $recovery_file_regex)"
+            if [ -e $recovery_file ]; then
+                cat $recovery_file | grep -q -E '\[ERROR\]\s+Found\s+[0-9]+\s+prepared\s+transactions!' 2>/dev/null
+                if [ $? -eq 0 ]; then
+                    # we can only rollback the transaction, but that's OK
+                    # since the DB will get resynchronized anyway
+                    echo "local node was not shutdown properly. Rollback stuck transaction with --tc-heuristic-recover" >&2
+                    mysqld_safe --wsrep-recover $recover_args \
+                                --tc-heuristic-recover=rollback --log-error=$tmp 2>/dev/null
+    
+                    last_commit="$(cat $tmp | sed -n $recovered_position_regex | tail -1)"
+                    if [ ! -z "$last_commit" ]; then
+                        echo "State recovered. force SST at next restart for full resynchronization" >&2
+                        rm -f /var/lib/mysql/grastate.dat
+                        # try not to bootstrap from this node if possible
+                        # set_no_grastate
+                    fi
+                fi
+            fi
+        fi
+        rm -f $tmp
+    fi
+    
+    if [ ! -z "$last_commit" ]; then
+        echo "$last_commit"
+        exit 0
+    else
+        echo "Unable to detect last known write sequence number" >&2
+        exit 1
+    fi
+
+  galera.cnf: |
+    [client]
+    port = 3306
+    socket = /var/lib/mysql/mysql.sock
+    
+    [isamchk]
+    key_buffer_size = 16M
+    
+    [mysqld]
+    basedir = /usr
+    bind-address = 127.0.0.1
+    binlog_format = ROW
+    datadir = /var/lib/mysql
+    default-storage-engine = innodb
+    expire_logs_days = 10
+    innodb_autoinc_lock_mode = 2
+    innodb_file_per_table = ON
+    innodb_flush_log_at_trx_commit = 1
+    innodb_locks_unsafe_for_binlog = 1
+    innodb_strict_mode = OFF
+    key_buffer_size = 16M
+    # log-error = /var/log/mariadb/mariadb.log
+    max_allowed_packet = 16M
+    max_binlog_size = 100M
+    max_connections = 4096
+    open_files_limit = 65536
+    pid-file = /var/lib/mysql/mariadb.pid
+    port = 3306
+    query_cache_limit = 1M
+    query_cache_size = 16M
+    skip-external-locking
+    skip-name-resolve = 1
+    socket = /var/lib/mysql/mysql.sock
+    thread_cache_size = 8
+    thread_stack = 256K
+    tmpdir = /tmp
+    user = mysql
+    wsrep_auto_increment_control = 1
+    wsrep_causal_reads = 0
+    wsrep_certify_nonPK = 1
+    # wsrep_cluster_address = gcomm://database-0.internalapi.redhat.local,database-1.internalapi.redhat.local,database-2.internalapi.redhat.local
+    wsrep_cluster_name = galera_cluster
+    wsrep_convert_LOCK_to_trx = 0
+    wsrep_debug = 0
+    wsrep_drupal_282555_workaround = 0
+    wsrep_on = ON
+    wsrep_provider = /usr/lib64/galera/libgalera_smm.so
+    wsrep_provider_options = gmcast.listen_addr=tcp://127.0.0.1:4567
+    wsrep_retry_autocommit = 1
+    wsrep_slave_threads = 1
+    wsrep_sst_method = rsync_tunnel
+    
+    [mysqld_safe]
+    # log-error = /var/log/mariadb/mariadb.log
+    nice = 0
+    pid-file = /var/lib/mysql/mariadb.pid
+    socket = /var/lib/mysql/mysql.sock
+    
+    [mysqldump]
+    max_allowed_packet = 16M
+    quick
+    quote-names
+
+  galera.cnf.in: |
+    [client]
+    port = 3306
+    socket = /var/lib/mysql/mysql.sock
+    
+    [isamchk]
+    key_buffer_size = 16M
+    
+    [mysqld]
+    basedir = /usr
+    bind-address = {{ PODNAME }}
+    binlog_format = ROW
+    datadir = /var/lib/mysql
+    default-storage-engine = innodb
+    expire_logs_days = 10
+    innodb_autoinc_lock_mode = 2
+    innodb_file_per_table = ON
+    innodb_flush_log_at_trx_commit = 1
+    innodb_locks_unsafe_for_binlog = 1
+    innodb_strict_mode = OFF
+    key_buffer_size = 16M
+    # log-error = /var/log/mariadb/mariadb.log
+    max_allowed_packet = 16M
+    max_binlog_size = 100M
+    max_connections = 4096
+    open_files_limit = 65536
+    pid-file = /var/lib/mysql/mariadb.pid
+    port = 3306
+    query_cache_limit = 1M
+    query_cache_size = 16M
+    skip-external-locking
+    skip-name-resolve = 1
+    socket = /var/lib/mysql/mysql.sock
+    thread_cache_size = 8
+    thread_stack = 256K
+    tmpdir = /tmp
+    user = mysql
+    wsrep_auto_increment_control = 1
+    wsrep_causal_reads = 0
+    wsrep_certify_nonPK = 1
+    # wsrep_cluster_address = gcomm://database-0.internalapi.redhat.local,database-1.internalapi.redhat.local,database-2.internalapi.redhat.local
+    wsrep_cluster_name = galera_cluster
+    wsrep_convert_LOCK_to_trx = 0
+    wsrep_debug = 0
+    wsrep_drupal_282555_workaround = 0
+    wsrep_on = ON
+    wsrep_provider = /usr/lib64/galera/libgalera_smm.so
+    wsrep_provider_options = gmcast.listen_addr=tcp://{{ PODIP }}:4567
+    wsrep_retry_autocommit = 1
+    wsrep_slave_threads = 1
+    wsrep_sst_method = rsync
+    
+    [mysqld_safe]
+    # log-error = /var/log/mariadb/mariadb.log
+    nice = 0
+    pid-file = /var/lib/mysql/mariadb.pid
+    socket = /var/lib/mysql/mysql.sock
+    
+    [mysqldump]
+    max_allowed_packet = 16M
+    quick
+    quote-names
+
+  detect_gcomm_and_start.sh: |
+    #!/bin/bash
+    
+    echo "Waiting for gcomm URI to be configured for this POD"
+    while [ ! -f /tmp/gcomm_uri ]; do
+          sleep 2
+    done
+    URI=$(cat /tmp/gcomm_uri)
+    if [ "$URI" = "gcomm://" ]; then
+       echo "this POD will now bootstrap a new galera cluster"
+       sed -i -e 's/^\(safe_to_bootstrap\):.*/\1: 1/' /var/lib/mysql/grastate.dat
+    else
+       echo "this POD will now join cluster $URI"
+    fi
+    
+    exec mysqld_safe --wsrep-cluster-address="$URI"
+
+  config.json: |
+    {
+        "command": "/usr/local/bin/detect_gcomm_and_start.sh",
+        "config_files": [
+            {
+                "source": "/var/lib/pod-config-data/galera.cnf",
+                "dest": "/etc/my.cnf.d/galera.cnf",
+                "owner": "root",
+                "perm": "0600"
+            },
+            {
+                "source": "/var/lib/operator-scripts",
+                "dest": "/usr/local/bin",
+                "owner": "root",
+                "perm": "0755",
+                "merge": "true"
+            }
+        ],
+        "permissions": [
+            {
+                "path": "/var/lib/mysql",
+                "owner": "mysql:mysql",
+                "recurse": "true"
+            }
+        ]
+    }
