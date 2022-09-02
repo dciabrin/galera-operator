@@ -1,4 +1,3 @@
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -32,15 +31,63 @@ rules:
   - update
   - watch
 - apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - ""
   resources:
   - pods
   verbs:
+  - create
+  - delete
   - get
   - list
+  - update
   - watch
 - apiGroups:
-  - database.example.com
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - mariadb.openstack.org
   resources:
   - galeras
   verbs:
@@ -52,16 +99,69 @@ rules:
   - update
   - watch
 - apiGroups:
-  - database.example.com
+  - mariadb.openstack.org
   resources:
   - galeras/finalizers
   verbs:
   - update
 - apiGroups:
-  - database.example.com
+  - mariadb.openstack.org
   resources:
   - galeras/status
   verbs:
   - get
+  - patch
+  - update
+- apiGroups:
+  - mariadb.openstack.org
+  resources:
+  - mariadbdatabases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - mariadb.openstack.org
+  resources:
+  - mariadbdatabases/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - mariadb.openstack.org
+  resources:
+  - mariadbdatabases/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - mariadb.openstack.org
+  resources:
+  - mariadbs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - mariadb.openstack.org
+  resources:
+  - mariadbs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - mariadb.openstack.org
+  resources:
+  - mariadbs/status
+  verbs:
+  - get
+  - list
   - patch
   - update

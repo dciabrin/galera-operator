@@ -1,8 +1,0 @@
-apiVersion: database.example.com/v1
-kind: Galera
-metadata:
-  name: galera
-spec:
-  secret: galera-secrets
-  image: quay.io/tripleomaster/openstack-mariadb:current-tripleo
-  size: 3

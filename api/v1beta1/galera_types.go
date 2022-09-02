@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,8 +24,12 @@ import (
 type GaleraSpec struct {
 	// Name of the secret to look for password keys
 	Secret string `json:"secret,omitempty"`
+	// Storage class to host the mariadb databases
+	StorageClass string `json:"storageClass,omitempty"`
+	// Storage size allocated for the mariadb databases
+	StorageRequest string `json:"storageRequest,omitempty"`
 	// Name of the galera container image to run
-	Image string `json:"image"`
+	ContainerImage string `json:"containerImage"`
 	// +kubebuilder:validation:Minimum=1
 	// Size of the galera cluster deployment
 	Size int32 `json:"size"`

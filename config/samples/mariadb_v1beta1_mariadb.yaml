@@ -1,0 +1,9 @@
+apiVersion: mariadb.openstack.org/v1beta1
+kind: MariaDB
+metadata:
+  name: openstack
+spec:
+  secret: mariadb-secret
+  storageClass: local-storage
+  storageRequest: 500M
+  containerImage: quay.io/tripleotraincentos8/centos-binary-mariadb:current-tripleo

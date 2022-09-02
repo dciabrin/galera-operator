@@ -1,0 +1,57 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+    operatorframework.io/suggested-namespace: openstack
+  name: galera-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Galera is the Schema for the galeras API
+      displayName: Galera
+      kind: Galera
+      name: galeras.mariadb.openstack.org
+      version: v1beta1
+    - description: MariaDBDatabase is the Schema for the mariadbdatabases API
+      displayName: Maria DBDatabase
+      kind: MariaDBDatabase
+      name: mariadbdatabases.mariadb.openstack.org
+      version: v1beta1
+    - description: MariaDB is the Schema for the mariadbs API
+      displayName: Maria DB
+      kind: MariaDB
+      name: mariadbs.mariadb.openstack.org
+      version: v1beta1
+  description: Galera Operator
+  displayName: Galera Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - OpenStack
+  - Database
+  - Galera
+  links:
+  - name: Galera Operator
+    url: https://github.com/dciabrin/galera-operator
+  maturity: alpha
+  provider:
+    name: provider
+  version: 0.0.0

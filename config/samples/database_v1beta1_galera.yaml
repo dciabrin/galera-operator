@@ -1,0 +1,10 @@
+apiVersion: mariadb.openstack.org/v1beta1
+kind: Galera
+metadata:
+  name: openstack
+spec:
+  secret: galera-secrets
+  storageClass: local-storage
+  storageRequest: 500M
+  containerImage: quay.io/tripleomaster/openstack-mariadb:current-tripleo
+  size: 3

@@ -24,6 +24,9 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -31,7 +34,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	databasev1 "github.com/dciabrin/galera-operator/api/v1"
+	// "github.com/dciabrin/galera-operator/api/v1beta1"
+	// databasev1 "github.com/dciabrin/galera-operator/api/v1beta1"
+	// mariadbv1beta1 "github.com/dciabrin/galera-operator/api/v1beta1"
+	databasev1beta1 "github.com/dciabrin/galera-operator/api/v1beta1"
 	"github.com/dciabrin/galera-operator/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -44,7 +50,8 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(databasev1.AddToScheme(scheme))
+	utilruntime.Must(databasev1beta1.AddToScheme(scheme))
+	// utilruntime.Must(mariadbv1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -52,7 +59,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8088", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -78,15 +85,45 @@ func main() {
 		os.Exit(1)
 	}
 
+	cfg, err := config.GetConfig()
+	if err != nil {
+		setupLog.Error(err, "")
+		os.Exit(1)
+	}
+	kclient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.GaleraReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Galera"),
-		Scheme: mgr.GetScheme(),
+		Client:  mgr.GetClient(),
+		Kclient: kclient,
+		Log:     ctrl.Log.WithName("controllers").WithName("Galera"),
+		Scheme:  mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Galera")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
+	if err = (&controllers.MariaDBReconciler{
+		Client:  mgr.GetClient(),
+		Kclient: kclient,
+		Log:     ctrl.Log.WithName("controllers").WithName("MariaDB"),
+		Scheme:  mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MariaDB")
+		os.Exit(1)
+	}
+	if err = (&controllers.MariaDBDatabaseReconciler{
+		Client:  mgr.GetClient(),
+		Kclient: kclient,
+		Log:     ctrl.Log.WithName("controllers").WithName("MariaDBDatabase"),
+		Scheme:  mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MariaDBDatabase")
+		os.Exit(1)
+	}
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
