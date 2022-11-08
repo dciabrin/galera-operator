@@ -273,6 +273,7 @@ func (r *GaleraReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			InstanceType: galera.Kind,
 			AdditionalTemplate: map[string]string{
 				"mysql_bootstrap.sh":        "/galera/bin/mysql_bootstrap.sh",
+				"mysql_probe.sh":            "/galera/bin/mysql_probe.sh",
 				"detect_last_commit.sh":     "/galera/bin/detect_last_commit.sh",
 				"detect_gcomm_and_start.sh": "/galera/bin/detect_gcomm_and_start.sh",
 			},
@@ -594,6 +595,10 @@ func (r *GaleraReconciler) statefulSetForGalera(m *databasev1beta1.Galera) *apps
 							MountPath: "/var/lib/pod-config-data",
 							Name:      "pod-config-data",
 						}, {
+							MountPath: "/var/lib/secrets",
+							ReadOnly:  true,
+							Name:      "secrets",
+						}, {
 							MountPath: "/var/lib/operator-scripts",
 							ReadOnly:  true,
 							Name:      "operator-scripts",
@@ -602,8 +607,36 @@ func (r *GaleraReconciler) statefulSetForGalera(m *databasev1beta1.Galera) *apps
 							ReadOnly:  true,
 							Name:      "kolla-config",
 						}},
+						LivenessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								Exec: &corev1.ExecAction{
+									Command: []string{"/bin/bash", "/var/lib/operator-scripts/mysql_probe.sh", "liveness"},
+								},
+							},
+						},
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								Exec: &corev1.ExecAction{
+									Command: []string{"/bin/bash", "/var/lib/operator-scripts/mysql_probe.sh", "readiness"},
+								},
+							},
+						},
 					}},
 					Volumes: []corev1.Volume{
+						{
+							Name: "secrets",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: m.Spec.Secret,
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "DbRootPassword",
+											Path: "dbpassword",
+										},
+									},
+								},
+							},
+						},
 						{
 							Name: "kolla-config",
 							VolumeSource: corev1.VolumeSource{
@@ -653,6 +686,10 @@ func (r *GaleraReconciler) statefulSetForGalera(m *databasev1beta1.Galera) *apps
 										{
 											Key:  "mysql_bootstrap.sh",
 											Path: "mysql_bootstrap.sh",
+										},
+										{
+											Key:  "mysql_probe.sh",
+											Path: "mysql_probe.sh",
 										},
 										{
 											Key:  "detect_last_commit.sh",
